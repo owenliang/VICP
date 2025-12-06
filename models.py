@@ -106,7 +106,7 @@ class Model(torch.nn.Module):
                 r=128,
             )
 
-        # 损失函数
+        # DINO视觉编码器的图片ID判别损失
         from ops.losses import HardTripletLoss
         self.loss = HardTripletLoss(margin=0.1, hardest=True)
 
@@ -184,6 +184,7 @@ class Model(torch.nn.Module):
 
         icl_loss = torch.tensor(0.0) # in-context-learning loss
 
+        # 256张图片，互相做对比，用来作为DINO的visual prompt
         if labels is not None and prompts is None:
             labels = labels.unsqueeze(1).expand(-1, nview).reshape(-1) # (batch,)->(batch,1)->(batch,多张)->(batch*多张)，每个样本是同一个petid，同批次内是同一类
             # clip_image_crops = clip_image_crops.reshape(-1, nc, clip_image_crops.size(-2), clip_image_crops.size(-1))
@@ -265,6 +266,7 @@ class Model(torch.nn.Module):
 
         ################ 
         # ========== 第二阶段：将LLM生成的视觉提示注入DINO编码器，完成细粒度特征提取 ==========
+        # ~~~~~~~~~~~~全量图片过DINO，随机使用visual prompt
         ot_loss = torch.tensor(0.0)
 
         # 1. 重整prompts形状：将LLM输出的提示序列按「层数」分组
@@ -314,7 +316,7 @@ class Model(torch.nn.Module):
         x = F.normalize(x, dim=-1)
         std = x.std(dim=0).mean()
         if labels is not None:
-            id_loss = self.loss(x, labels)
+            id_loss = self.loss(x, labels) # 核心LOSS：全量图片的DINO输出CLS Emb、全量图片的petid
             
             # 这是OT LOSS，需要看下
             from ops.wpa import compute_wpa
