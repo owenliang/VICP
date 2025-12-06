@@ -94,13 +94,13 @@ class PetFaceDataset(Dataset):
         self.label2images = {}
         self.categorytoindex = {c: i for i, c in enumerate(class_names)}
         self.category_labels = []
-        for idx, f in enumerate(image_list):
-            n = '/'.join(f.split('/')[-3:-1])
+        for idx, f in enumerate(image_list): # f:beverage_bottle/00018_00002/00000.jpg
+            n = '/'.join(f.split('/')[-3:-1])  # n:beverage_bottle/00018_00002 ，格式是：类别/个体ID
             if n not in d:
-                d[n] = len(d)
-            self.labels.append(d[n])
+                d[n] = len(d) # d给个体分配唯一ID，也就是pet
+            self.labels.append(d[n])  # 每条记录的pet
             if n not in self.label2images:
-                self.label2images[n] = []
+                self.label2images[n] = [] # pet -> 个体的所有图片
             # self.label2images[n].append(idx)
             self.label2images[n].append(f)
             self.category_labels.append(self.categorytoindex[n.split('/')[0]])
@@ -122,11 +122,11 @@ class PetFaceDataset(Dataset):
         return len(self.label2images)
     
     def __getitem__(self, idx):
-        pid = list(self.label2images.keys())[idx]
-        img_path1, img_path2 = random.choices(self.label2images[pid], k=2)
+        pid = list(self.label2images.keys())[idx] # idx指向某个petid
+        img_path1, img_path2 = random.choices(self.label2images[pid], k=2) # 从petid对应的图片中随机选两张
         image1 = self.transform(Image.open(img_path1).convert("RGB"))
         image2 = self.transform(Image.open(img_path2).convert("RGB"))
-        return {'image_crops': torch.stack([image1, image2]), 'labels': torch.tensor(idx, dtype=torch.long)}
+        return {'image_crops': torch.stack([image1, image2]), 'labels': torch.tensor(idx, dtype=torch.long)} # 每个样本是同一个pet的2张图
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -149,6 +149,22 @@ class MyTrainTask(CustomTrainer):
     def __init__(self, args):
         weight_dtype = torch.float16 if args.fp16 else (torch.bfloat16 if args.bf16 else torch.float32)
 
+        '''
+        data_config = {
+            'amazon': {
+                'splits': [
+                    ['bicycle_helmet', 'hand_truck', 'jacket', 'duffel_bag', 'cooler', 'binoculars', 'bicycle'],
+                    ['purse', 'skateboard', 'suitcase', 'tire_wheel', 'mobile_phone', 'hat', 'shoes'],
+                    ['backpack', 'portable_speaker', 'stroller', 'beverage_bottle', 'food_container', 'box', 'cart'],
+                    ['headphones', 'trash_can', 'poster_tube', 'pet_carrier', 'musical_instrument', 'book', 'tackle_box'],
+                    ['sports_equipment', 'portable_chair', 'sports_ball', 'bucket', 'umbrella', 'hardshell_case']
+                ],
+                'classes': ['tackle_box', 'portable_chair', 'bicycle', 'poster_tube', 'duffel_bag', 'sports_equipment', 'hat', 'box', 'purse', 'hardshell_case', 'suitcase', 'umbrella', 'musical_instrument', 'trash_can', 'hand_truck', 'pet_carrier', 'sports_ball', 'mobile_phone', 'portable_speaker', 'binoculars', 'headphones', 'beverage_bottle', 'tire_wheel', 'jacket', 'cooler', 'book', 'stroller', 'backpack', 'food_container', 'cart', 'bucket', 'shoes', 'bicycle_helmet', 'skateboard'],
+                'root': './groundingdino_cropped',
+                'transform': None,
+            }
+        }
+        '''
         if args.cluster_index == -1:
             train_categories = data_config[args.dataset_name]['classes']
         else:
@@ -159,6 +175,7 @@ class MyTrainTask(CustomTrainer):
                 classes.extend(data_config[args.dataset_name]['splits'][i])
             train_categories = classes
         self.categories = train_categories
+        # 宠物类型 -> 不同的图片
         train_dataset = PetFaceDataset(
             image_path=data_config[args.dataset_name]['root'],
             class_names=train_categories,

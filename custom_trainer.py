@@ -118,6 +118,10 @@ class CustomTrainer(Trainer):
         self.log(all_results)
         return all_results
 
+    ''''
+    CustomTrainer._get_train_sampler 返回的是一个自定义 OrderedSampler，它产出“预先排好序的索引序列”。DataLoader再按自身的 batch_size把这串索引切成一个个 batch。
+    代码里通过把“每个 batch 需要的索引”按宠物类型拼接成连续片段，再与 DataLoader 的 batch_size对齐，达到了“同类整批”的效果。若要更直接和稳妥，也可以改成返回 BatchSampler，一次就产出一个索引列表作为一个 batch。
+    '''
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         if not self.args.replace_sampler:
             return super()._get_train_sampler()
@@ -125,22 +129,22 @@ class CustomTrainer(Trainer):
         print('Using custom sampler')
 
         dataset = self.train_dataset
-        pids = np.array(list(dataset.label2images.keys()))
-        labels = np.array([dataset.pid2label[x] for x in pids])
+        pids = np.array(list(dataset.label2images.keys())) #所有个体ID
+        labels = np.array([dataset.pid2label[x] for x in pids]) # 个体ID对应的分类标签
         print(labels)
-        label_to_indices = {label: np.where(labels == label)[0] for label in np.unique(labels)}
+        label_to_indices = {label: np.where(labels == label)[0] for label in np.unique(labels)} # 分类标签到petid下标的映射
         num_batches = 10000
         batch_size = self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps * self.accelerator.num_processes
         print('batch_size: ', batch_size, 'num_batches: ', num_batches)
         all_batches = []
         
         while len(all_batches) < num_batches:
-            current_label = np.random.choice(list(label_to_indices.keys()))
-            indices = label_to_indices[current_label]
+            current_label = np.random.choice(list(label_to_indices.keys())) # 随机选1个分类
+            indices = label_to_indices[current_label] # 该分类对应的petid下标
             # print(current_label, indices, len(indices))
             # exit(0)
-            batch_indices = np.random.choice(indices, batch_size, replace=True)
-            all_batches.append(batch_indices)
+            batch_indices = np.random.choice(indices, batch_size, replace=True) # 选择该分类batch_size个 个体id（实际是label2images的下标）
+            all_batches.append(batch_indices) # 这个batch内都是同一类的
         indices = np.array(all_batches).flatten()
         # print(indices)
         from torch.utils.data import DataLoader, Dataset, Sampler
