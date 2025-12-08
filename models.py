@@ -106,7 +106,7 @@ class Model(torch.nn.Module):
                 r=128,
             )
 
-        # DINO视觉编码器的图片ID判别损失
+        # DINO视觉编码器的Loss函数，根据DINO编码的图片embedding，让相同petid的图片embedding距离更近，不同petid的图片embedding距离更远
         from ops.losses import HardTripletLoss
         self.loss = HardTripletLoss(margin=0.1, hardest=True)
 
@@ -316,7 +316,7 @@ class Model(torch.nn.Module):
         x = F.normalize(x, dim=-1)
         std = x.std(dim=0).mean()
         if labels is not None:
-            id_loss = self.loss(x, labels) # 核心LOSS：全量图片的DINO输出CLS Emb、全量图片的petid
+            id_loss = self.loss(x, labels) # 核心LOSS：输入全量图片的DINO输出CLS Emb、全量图片的petid，优化目标是让相同petid的emb距离更小，不同petid的emb距离更大
             
             # 这是OT LOSS，需要看下
             from ops.wpa import compute_wpa
